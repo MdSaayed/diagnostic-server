@@ -46,9 +46,8 @@ async function run() {
 
 
         const userCollection = client.db("diagnostic").collection("users");
-        const menuCollection = client.db("bistroDb").collection("menu");
-        const reviewCollection = client.db("bistroDb").collection("reviews");
-        const cartCollection = client.db("bistroDb").collection("carts");
+        const bookingCollection = client.db("diagnostic").collection("bookings");
+        const testCollection = client.db("diagnostic").collection("tests");
 
         // varify admin
         const varifyAdmin = async (req, res, next) => {
@@ -102,6 +101,13 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/usersInfo/:email', varifyToken, async (req, res) => {
+            const userEmail = req.params.email;
+            const filter = { email: userEmail }
+            const cursor = await userCollection.findOne(filter);
+            res.send(cursor);
+        })
+
         // admin related api
         app.patch('/users/admin/:id', varifyToken, varifyAdmin, async (req, res) => {
             const id = req.params.id;
@@ -109,6 +115,37 @@ async function run() {
             const updateDoc = {
                 $set: {
                     role: 'admin'
+                }
+            }
+            const result = await userCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        })
+
+        // name, email, district, upazila, blood
+        app.put('/updateUser/:email', varifyToken, async (req, res) => {
+            const userEmail = req.params.email;
+            const data = req.body;
+            console.log(data);
+            const filter = { email: userEmail };
+            const update = {
+                $set: {
+                    name: data.name,
+                    email: data.email,
+                    district: data.district,
+                    upazila: data.upazila,
+                    blood: data.blood,
+                }
+            }
+            const result = await userCollection.updateMany(filter, update);
+        });
+
+        // user status
+        app.patch('/users/status/:id', varifyToken, varifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: 'blocked'
                 }
             }
             const result = await userCollection.updateOne(filter, updateDoc);
@@ -123,63 +160,86 @@ async function run() {
             res.send(result);
         })
 
-        // menu related api  
-        app.get('/menu', async (req, res) => {
-            const cursor = await menuCollection.find().toArray();
-            res.send(cursor);
-        })
-
-        // menu item post 
-        app.post('/menu', varifyToken, varifyAdmin, async (req, res) => {
+        // booking item post  
+        app.post('/bookings', varifyToken, async (req, res) => {
             const item = req.body;
-            const result = await menuCollection.insertOne(item);
+            const result = await bookingCollection.insertOne(item);
             res.send(result);
         })
 
-        app.get('/menu/:id', async (req, res) => {
+        // all booking item get  
+        app.get('/bookings', varifyToken, async (req, res) => {
+            const cursor = await bookingCollection.find().toArray();
+            res.send(cursor);
+        })
+
+        // all booking item get  
+        app.get('/bookings/:email', varifyToken, async (req, res) => {
+            const userEmail = req.params.email;
+            const filter = { email: userEmail }
+            const cursor = await bookingCollection.find(filter).toArray();
+            res.send(cursor);
+        })
+
+        // booking sigle item get  
+        app.patch('/bookings/:id', varifyToken, async (req, res) => {
             const id = req.params.id;
-            const query = { _id: new ObjectId(id) }
-            const result = await menuCollection.findOne(query);
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: 'Canceled'
+                }
+            }
+            const result = await bookingCollection.updateOne(filter, updateDoc);
             res.send(result);
         });
 
-
-        // delete menu item
-        app.delete('/menu/:id', varifyToken, varifyAdmin, async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: new ObjectId(id) }
-            const result = await menuCollection.deleteOne(query);
+        app.post('/tests', varifyToken, varifyAdmin, async (req, res) => {
+            const item = req.body;
+            const result = await testCollection.insertOne(item);
             res.send(result);
         })
 
+        // tests related api   
+        app.get('/tests', async (req, res) => {
+            const result = await testCollection.find().toArray();
+            res.send(result);
+        })
 
-        app.get('/reviews', async (req, res) => {
-            const cursor = await reviewCollection.find().toArray();
+        app.get('/tests/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const cursor = await testCollection.findOne(filter);
             res.send(cursor);
         })
 
-        // carts items
-        app.post('/carts', async (req, res) => {
-            const CartItem = req.body;
-            const result = await cartCollection.insertOne(CartItem);
-            res.send(result);
-        })
+        app.put('/tests/:id', varifyToken, varifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const data = req.body;
+            console.log(data);
+            const filter = { _id: new ObjectId(id) };
+            const update = {
+                $set: {
+                    testName: data.testName,
+                    image: data.image,
+                    price: data.price,
+                    date: data.date,
+                    slot: data.slot,
+                    details: data.details,
+                }
+            }
+            const result = await testCollection.updateMany(filter, update);
+        });
 
-        // get cart items
-        app.get('/carts', async (req, res) => {
-            const email = req.query.email;
-            const query = { email: email }
-            const result = await cartCollection.find(query).toArray();
-            res.send(result);
-        })
-
-        // delete cart item
-        app.delete('/carts/:id', async (req, res) => {
+        // test delete
+        app.delete('/tests/:id', varifyToken, varifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
-            const result = cartCollection.deleteOne(query);
+            const result = await testCollection.deleteOne(query);
             res.send(result);
         })
+
 
 
         // Send a ping to confirm a successful connection
