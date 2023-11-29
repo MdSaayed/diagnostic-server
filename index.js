@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 const app = express();
@@ -28,6 +29,7 @@ const varifyToken = (req, res, next) => {
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { default: Stripe } = require('stripe');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.dejlh8b.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -48,6 +50,7 @@ async function run() {
         const userCollection = client.db("diagnostic").collection("users");
         const bookingCollection = client.db("diagnostic").collection("bookings");
         const testCollection = client.db("diagnostic").collection("tests");
+        const paymentCollection = client.db("diagnostic").collection("payments");
 
         // varify admin
         const varifyAdmin = async (req, res, next) => {
@@ -225,6 +228,7 @@ async function run() {
                     image: data.image,
                     price: data.price,
                     date: data.date,
+                    time: data.time,
                     slot: data.slot,
                     details: data.details,
                 }
@@ -237,6 +241,48 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await testCollection.deleteOne(query);
+            res.send(result);
+        })
+
+
+        // =========================payment related api======================= 
+        app.post("/create-payment-intent", async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ['card']
+
+            })
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        })
+
+        app.post('/payments', async (req, res) => {
+            const payment = req.body;
+            console.log(payment);
+            const paymentPost = await paymentCollection.insertOne(payment);
+
+            // update slot
+            const query = { _id: new ObjectId(payment.testId) }
+            const update = {
+                $set: {
+                    slot: payment.slot,
+                }
+            }
+            const testSlotUpdate = await testCollection.updateOne(query, update);
+
+            res.send({ paymentPost, testSlotUpdate });
+        })
+
+        // get payment history
+        app.get('/payments/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = {email: email}
+            const result = await paymentCollection.find(query).toArray();
             res.send(result);
         })
 
