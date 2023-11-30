@@ -8,7 +8,12 @@ const app = express();
 
 
 app.use(express.json());
-app.use(cors());
+app.use(cors(
+    {
+        origin: ['https://delightful-snickerdoodle-2643ae.netlify.app', 'http://localhost:5173'],
+        credentials: true
+    }
+));
 
 // own midlewares
 const varifyToken = (req, res, next) => {
