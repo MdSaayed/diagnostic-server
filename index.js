@@ -16,7 +16,7 @@ const varifyToken = (req, res, next) => {
         return res.status(401).send({ message: 'unauthorized access' })
     }
     const token = req.headers.authorization.split(' ')[1];
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRETS, (err, decoded) => {
         if (err) {
             return res.status(401).send({ message: 'unauthorized access' })
         }
@@ -30,7 +30,7 @@ const varifyToken = (req, res, next) => {
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { default: Stripe } = require('stripe');
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.dejlh8b.mongodb.net/?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://${process.env.MY_DB_USER}:${process.env.MY_DB_PSS}@cluster0.dejlh8b.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -68,7 +68,7 @@ async function run() {
         // jwt related api
         app.post('/jwt', async (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRETS, { expiresIn: '1h' });
             res.send({ token });
         })
 
@@ -188,7 +188,6 @@ async function run() {
         // booking sigle item get  
         app.patch('/bookings/:id', varifyToken, async (req, res) => {
             const id = req.params.id;
-            console.log(id);
             const filter = { _id: new ObjectId(id) }
             const updateDoc = {
                 $set: {
@@ -221,7 +220,6 @@ async function run() {
         app.put('/tests/:id', varifyToken, varifyAdmin, async (req, res) => {
             const id = req.params.id;
             const data = req.body;
-            console.log(data);
             const filter = { _id: new ObjectId(id) };
             const update = {
                 $set: {
@@ -235,6 +233,20 @@ async function run() {
                 }
             }
             const result = await testCollection.updateMany(filter, update);
+        });
+
+        // update test collection sigle item 
+        app.patch('/testsCancel/:id', varifyToken, async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: 'Canceled'
+                }
+            }
+            const result = await testRusltCollection.updateOne(filter, updateDoc);
+            res.send(result);
         });
 
         // test delete
@@ -297,8 +309,30 @@ async function run() {
             res.send(cursor);
         })
 
+        app.get('/testResultCount', async (req, res) => {
+            const count = await testRusltCollection.estimatedDocumentCount();
+            res.send({ count });
+        })
+
+        // get payment history
+        app.get('/seeReport/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await testRusltCollection.findOne(query);
+            res.send(result);
+        })
+
+        // 
+        // app.get('/products', async (req, res) => {
+        //     const page = parseInt(req.query.page);
+        //     const size = parseInt(req.query.size);
+        //     const result = await productCollection.find().skip(page * size).limit(size).toArray();
+        //     res.send(result);
+        //   });
         app.get('/testResult', async (req, res) => {
-            const result = await testRusltCollection.find().toArray();
+            const page = parseInt(req.query.page);
+            const size = parseInt(req.query.size);
+            const result = await testRusltCollection.find().skip(page * size).limit(size).toArray();
             res.send(result);
         })
 
