@@ -50,6 +50,7 @@ async function run() {
         const userCollection = client.db("diagnostic").collection("users");
         const bookingCollection = client.db("diagnostic").collection("bookings");
         const testCollection = client.db("diagnostic").collection("tests");
+        const testRusltCollection = client.db("diagnostic").collection("testResult");
         const paymentCollection = client.db("diagnostic").collection("payments");
 
         // varify admin
@@ -263,7 +264,7 @@ async function run() {
 
         app.post('/payments', async (req, res) => {
             const payment = req.body;
-            console.log(payment);
+
             const paymentPost = await paymentCollection.insertOne(payment);
 
             // update slot
@@ -275,16 +276,51 @@ async function run() {
             }
             const testSlotUpdate = await testCollection.updateOne(query, update);
 
-            res.send({ paymentPost, testSlotUpdate });
+            // test result post
+            const testResult = await testRusltCollection.insertOne(payment);
+            res.send({ paymentPost, testSlotUpdate, testResult });
         })
 
         // get payment history
         app.get('/payments/:email', async (req, res) => {
             const email = req.params.email;
-            const query = {email: email}
+            const query = { email: email }
             const result = await paymentCollection.find(query).toArray();
             res.send(result);
         })
+
+        // =======================test result==========================
+        app.get('/testResult/:email', async (req, res) => {
+            const email = req.params.email;
+            const filter = { email: email }
+            const cursor = await testRusltCollection.find(filter).toArray();
+            res.send(cursor);
+        })
+
+        app.get('/testResult', async (req, res) => {
+            const result = await testRusltCollection.find().toArray();
+            res.send(result);
+        })
+
+        // update test result
+        // user status
+        app.patch('/addReport/:id', varifyToken, varifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const data = req.body;
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    status: 'complete',
+                    report: data.report,
+                }
+            };
+            const options = {
+                upsert: true // Set to true to perform an upsert
+            };
+
+            const result = await testRusltCollection.updateMany(filter, updateDoc, options);
+            res.send(result);
+        });
 
 
 
