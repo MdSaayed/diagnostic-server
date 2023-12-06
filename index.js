@@ -1,15 +1,19 @@
 const express = require('express');
-const cors = require('cors');
 require('dotenv').config();
+const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
-const port = process.env.PORT || 5000;  
-const app = express(); 
+const port = process.env.PORT || 5000;
+const app = express();
+
 
 
 app.use(express.json());
-app.use(cors( ));
- 
+app.use(cors({
+    origin: ['https://delightful-snickerdoodle-2643ae.netlify.app', 'http://localhost:5173'],
+    credentials: true
+}));
+
 // own midlewares
 const varifyToken = (req, res, next) => {
     if (!req.headers.authorization) {
@@ -51,6 +55,9 @@ async function run() {
         const bookingCollection = client.db("diagnostic").collection("bookings");
         const testCollection = client.db("diagnostic").collection("tests");
         const testRusltCollection = client.db("diagnostic").collection("testResult");
+        const doctorCollection = client.db("diagnostic").collection("doctors");
+        const bannerCollection = client.db("diagnostic").collection("banners");
+        const activeBannerCollection = client.db("diagnostic").collection("activeBanner");
         const paymentCollection = client.db("diagnostic").collection("payments");
 
         // varify admin
@@ -73,7 +80,7 @@ async function run() {
         })
 
         // user related api
-        app.get('/users', varifyToken, varifyAdmin, async (req, res) => {
+        app.get('/users', varifyToken, async (req, res) => {
             const result = await userCollection.find().toArray();
             res.send(result);
         })
@@ -105,7 +112,7 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/usersInfo/:email', varifyToken, async (req, res) => {
+        app.get('/usersInfo/:email', async (req, res) => {
             const userEmail = req.params.email;
             const filter = { email: userEmail }
             const cursor = await userCollection.findOne(filter);
@@ -144,7 +151,7 @@ async function run() {
         });
 
         // user status
-        app.patch('/users/status/:id', varifyToken, varifyAdmin, async (req, res) => {
+        app.patch('/users/status/:id', varifyToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const updateDoc = {
@@ -195,10 +202,21 @@ async function run() {
                 }
             }
             const result = await bookingCollection.updateOne(filter, updateDoc);
-            res.send(result); 
+            res.send(result);
         });
 
-        app.post('/tests', varifyToken, varifyAdmin, async (req, res) => {
+
+        // ========doctor realted api=========
+
+        app.get('/doctors', async (req, res) => {
+            const result = await doctorCollection.find().toArray();
+            res.send(result);
+        })
+
+
+        // ============test related api========
+
+        app.post('/tests', varifyToken, async (req, res) => {
             const item = req.body;
             const result = await testCollection.insertOne(item);
             res.send(result);
@@ -206,8 +224,15 @@ async function run() {
 
         // tests related api   
         app.get('/tests', async (req, res) => {
-            const result = await testCollection.find().toArray();
+            const page = parseInt(req.query.page);
+            const size = parseInt(req.query.size);
+            const result = await testCollection.find().skip(page * size).limit(size).toArray();
             res.send(result);
+        })
+
+        app.get('/testCount', async (req, res) => {
+            const count = await testCollection.estimatedDocumentCount();
+            res.send({ count });
         })
 
         app.get('/tests/:id', async (req, res) => {
@@ -250,7 +275,7 @@ async function run() {
         });
 
         // test delete  
-        app.delete('/tests/:id', varifyToken, varifyAdmin, async (req, res) => {
+        app.delete('/tests/:id', varifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await testCollection.deleteOne(query);
@@ -258,7 +283,7 @@ async function run() {
         })
 
 
-        // =========================payment related api======================= 
+        // =========================payment related api======================= j
         app.post("/create-payment-intent", async (req, res) => {
             const { payAmount } = req.body;
             const amount = parseInt(payAmount * 100);
@@ -270,7 +295,7 @@ async function run() {
 
             })
             res.send({
-                clientSecret: paymentIntent.client_secret,  
+                clientSecret: paymentIntent.client_secret,
             });
         })
 
@@ -322,13 +347,72 @@ async function run() {
             res.send(result);
         })
 
-        // 
-        // app.get('/products', async (req, res) => {
-        //     const page = parseInt(req.query.page);
-        //     const size = parseInt(req.query.size);
-        //     const result = await productCollection.find().skip(page * size).limit(size).toArray();
-        //     res.send(result);
-        //   });
+
+        // ============================banner related api ====================
+        app.post('/banners', varifyToken, async (req, res) => {
+            const item = req.body;
+            const result = await bannerCollection.insertOne(item);
+            res.send(result);
+        })
+
+        // all banner get  
+        app.get('/banners', varifyToken, async (req, res) => {
+            const cursor = await bannerCollection.find().toArray();
+            res.send(cursor);
+        })
+        // sigle  banner get  
+        app.get('/banners/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const cursor = await bannerCollection.findOne(query);
+            res.send(cursor);
+        })
+
+        // update banner
+        app.put('/banners/:id', varifyToken, async (req, res) => {
+            const id = req.params.id;
+            const data = req.body;
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    bannerHeading: data.bannerHeading,
+                    bannerImg: data.bannerImg,
+                    btnLink: data.btnLink,
+                    bannerDesc: data.bannerDesc
+                }
+            };
+            const result = await bannerCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        });
+        // set banner
+        app.patch('/activeBanner/:id', varifyToken, async (req, res) => {
+            try {
+                const id = req.params.id;
+                const data = req.body;
+                const updatedBannerId = data.bannerId.bannerId || data.bannerId;
+                const filter = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        bannerId: updatedBannerId
+                    }
+                };
+                const result = await activeBannerCollection.updateOne(filter, updateDoc);
+
+                res.send(result);
+            } catch (error) {
+                console.error('Error updating banner:', error);
+                res.status(500).send('Internal Server Error');
+            }
+        });
+
+
+        // all banner get  
+        app.get('/activeBanner', async (req, res) => {
+            const cursor = await activeBannerCollection.find().toArray();
+            res.send(cursor);
+        })
+
+
         app.get('/testResult', async (req, res) => {
             const page = parseInt(req.query.page);
             const size = parseInt(req.query.size);
